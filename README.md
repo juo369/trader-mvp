@@ -4,6 +4,30 @@ Python-Grundgerüst für einen einfachen Trader: Aktien und ETFs, Kursdaten von 
 
 **Wichtig:** Dies ist eine reine Simulation. Es gibt keinen Broker-Anschluss, keine API-Keys und keine echten Orders. Das Projekt ist keine Anlageberatung.
 
+## Die App (am einfachsten)
+
+Es gibt eine kleine Web-App mit Oberfläche, ganz ohne Befehle im Kopf. Sie läuft lokal in deinem Browser.
+
+Einmal die neuen Pakete installieren (Streamlit):
+
+```bash
+.venv\Scripts\python.exe -m pip install -r requirements.txt      # Windows PowerShell
+.venv/bin/python -m pip install -r requirements.txt              # Mac/Linux
+```
+
+Starten:
+
+```bash
+.venv\Scripts\python.exe -m streamlit run app.py                 # Windows PowerShell
+.venv/bin/python -m streamlit run app.py                         # Mac/Linux
+```
+
+Unter Windows geht auch ein Doppelklick auf `windows/5-app-starten.bat`.
+
+- Der Browser öffnet sich automatisch unter http://localhost:8501.
+- Beenden: Im Terminal-Fenster **Strg+C** drücken.
+- Beim ersten Start fragt Streamlit vielleicht nach einer E-Mail-Adresse. Dann einfach **Enter** drücken, du musst nichts eingeben.
+
 ## Funktionen
 
 - **Backtest** einer SMA-Crossover-Strategie mit Gebühren, ohne Lookahead (Signal von gestern, Ausführung zum heutigen Schlusskurs), inkl. Buy-&-Hold-Vergleich
