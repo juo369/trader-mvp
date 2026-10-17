@@ -12,6 +12,13 @@ import streamlit as st
 from trader.backtest import run_backtest
 from trader.broker import PaperBroker
 from trader.data import latest_price, load_prices
+from trader.momentum import (
+    UNIVERSES,
+    current_ranking,
+    equal_weight_buy_and_hold,
+    load_universe,
+    run_momentum_backtest,
+)
 from trader.optimize import default_candidates, walk_forward
 from trader.paper import run_paper_step
 from trader.report import (
@@ -111,6 +118,8 @@ def render_start() -> None:
         "gebracht hätte.\n"
         "- **🔍 Strategie-Finder:** Er probiert viele Einstellungen aus und prüft den Sieger "
         "an einer Zeit, die er nicht kannte.\n"
+        "- **🚀 Momentum:** Du hältst einmal im Monat die Werte, die zuletzt am stärksten "
+        "gestiegen sind, und schichtest dafür um.\n"
         "- **💼 Mein Spielgeld-Konto:** Du lässt die Strategie mit einem Konto aus Spielgeld "
         "handeln, Schritt für Schritt mit aktuellen Kursen."
     )
@@ -476,6 +485,223 @@ def show_orders(broker: PaperBroker) -> None:
     st.dataframe(pd.DataFrame(rows), hide_index=True)
 
 
+MOMENTUM_LOOKBACK_OPTIONS = [3, 6, 12]
+MOMENTUM_STOCK_CAPTION = (
+    "Achtung: Die Aktien-Listen enthalten Firmen, die heute bekannt und erfolgreich sind. "
+    "Das lässt die Vergangenheit besser aussehen, als sie für einen Anleger damals gewesen wäre."
+)
+
+
+def run_momentum(
+    tickers: list[str], start_year: int, lookback: int, top_n: int, cash_filter: bool,
+    fee_rate: float, universe_name: str,
+) -> dict:
+    """Lädt die Kurse und rechnet Momentum, Kaufen & Halten und die aktuelle Rangliste.
+
+    Wirft ValueError oder andere Fehler.
+    """
+    closes, skipped = load_universe(tickers, f"{start_year}-01-01", loader=load_prices)
+    result = run_momentum_backtest(
+        closes,
+        lookback_months=lookback,
+        top_n=top_n,
+        cash_filter=cash_filter,
+        fee_rate=fee_rate,
+        initial_cash=float(START_CASH),
+    )
+    benchmark = equal_weight_buy_and_hold(closes, float(START_CASH))
+    ranking, selection = current_ranking(closes, lookback, top_n, cash_filter)
+    return {
+        "universe": universe_name,
+        "start_year": start_year,
+        "lookback": lookback,
+        "top_n": top_n,
+        "cash_filter": cash_filter,
+        "skipped": skipped,
+        "equity": result.equity,
+        "rebalances": result.rebalances,
+        "metrics": result.metrics,
+        "benchmark": benchmark,
+        "ranking": ranking,
+        "selection": selection,
+    }
+
+
+def render_momentum() -> None:
+    st.header("🚀 Momentum")
+    st.markdown(
+        "Einmal im Monat schaust du, welche Werte aus einer Liste in den letzten Monaten am "
+        "stärksten gestiegen sind, und hältst die zuletzt stärksten bis zum nächsten Monat. "
+        "Das dauert etwa 5 Minuten im Monat. Mit der **Sicherheitsregel** bleibst du in Bargeld, "
+        "wenn alle Werte im Minus sind. Das ist eine der bekanntesten Strategien, aber auch sie "
+        "schlägt Kaufen & Halten nicht immer."
+    )
+
+    universe_name = st.selectbox("Welche Liste soll geprüft werden?", list(UNIVERSES.keys()),
+                                 key="mom_universe")
+    universe_index = list(UNIVERSES.keys()).index(universe_name)
+    members = UNIVERSES[universe_name]
+    selected = st.multiselect(
+        "Welche Werte sollen dabei sein?",
+        members,
+        default=members,
+        key=f"mom_tickers_{universe_index}",
+        help="Abwählen geht jederzeit.",
+    )
+    extra_text = st.text_input(
+        "Weitere Ticker (mit Komma getrennt)",
+        key="mom_extra",
+        placeholder="z. B. VTI, IWDA.AS",
+    )
+    extra = [clean_ticker(t) for t in extra_text.split(",") if clean_ticker(t)]
+    tickers = list(dict.fromkeys(selected + extra))
+
+    start_year = st.slider(
+        "Ab welchem Jahr soll getestet werden?",
+        min_value=2000,
+        max_value=date.today().year - 1,
+        value=2012,
+        key="mom_year",
+    )
+    lookback = st.radio(
+        "Rückblick",
+        MOMENTUM_LOOKBACK_OPTIONS,
+        index=MOMENTUM_LOOKBACK_OPTIONS.index(12),
+        format_func=lambda months: f"{months} Monate",
+        horizontal=True,
+        key="mom_lookback",
+    )
+    top_n = st.slider(
+        "Wie viele Werte gleichzeitig halten?",
+        min_value=1,
+        max_value=3,
+        value=1,
+        key="mom_top_n",
+    )
+    cash_filter = st.checkbox(
+        "Sicherheitsregel: Wenn alles fällt, in Bargeld bleiben",
+        value=True,
+        key="mom_cash_filter",
+    )
+    fee_rate = fee_input("mom_fee")
+
+    if st.button("🚀 Momentum testen", type="primary", width="stretch", key="mom_run"):
+        if len(tickers) < 2:
+            st.session_state.pop("momentum", None)
+            st.warning("Bitte wähle mindestens zwei Werte aus.")
+        else:
+            with st.spinner("Lade Kursdaten von Yahoo Finance und rechne die Rotation…"):
+                try:
+                    st.session_state["momentum"] = run_momentum(
+                        tickers, start_year, lookback, top_n, cash_filter, fee_rate,
+                        universe_name,
+                    )
+                except ValueError as err:
+                    st.session_state.pop("momentum", None)
+                    st.error(f"{err} {NETWORK_HINT}")
+                except Exception:
+                    st.session_state.pop("momentum", None)
+                    st.error(
+                        "Die Kursdaten konnten nicht geladen werden. " + NETWORK_HINT
+                    )
+
+    result = st.session_state.get("momentum")
+    if result:
+        show_momentum_result(result)
+
+
+def show_momentum_result(result: dict) -> None:
+    metrics = result["metrics"]
+    equity = result["equity"]
+    benchmark = result["benchmark"]
+    final_value = float(equity.iloc[-1])
+    bench_return = float(benchmark.iloc[-1] / float(START_CASH) - 1)
+    gain = final_value - START_CASH
+
+    if result["skipped"]:
+        st.warning(
+            "Diese Werte konnten nicht geladen werden und wurden übersprungen: "
+            + ", ".join(result["skipped"])
+        )
+
+    cash_text = "mit Sicherheitsregel" if result["cash_filter"] else "ohne Sicherheitsregel"
+    st.caption(
+        f"Ergebnis für {result['universe']} ab {result['start_year']}, Rückblick "
+        f"{result['lookback']} Monate, {result['top_n']} gleichzeitig, {cash_text}."
+    )
+
+    if metrics["total_return"] < 0:
+        st.warning("Mit Momentum hättest du Geld verloren.")
+    elif metrics["total_return"] >= bench_return:
+        st.success("Momentum war besser als Kaufen & Halten (alle gleich).")
+    else:
+        st.info(
+            "Momentum hat Gewinn gemacht, aber Kaufen & Halten (alle gleich) wäre besser "
+            "gewesen."
+        )
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Endwert", fmt_number(final_value), delta=fmt_number(gain, signed=True))
+    col2.metric("Rendite Momentum", fmt_pct(metrics["total_return"]))
+    col3.metric("Kaufen & Halten (alle gleich)", fmt_pct(bench_return))
+    col4, col5, col6 = st.columns(3)
+    col4.metric("Grösster Einbruch", fmt_pct(metrics["max_drawdown"]))
+    col5.metric("Wechsel", metrics["num_rebalances_changed"])
+    col6.metric("Gebühren gesamt", fmt_number(metrics["total_fees"], decimals=2))
+
+    st.subheader("Momentum im Vergleich")
+    st.line_chart(
+        pd.DataFrame(
+            {"Momentum": equity, "Kaufen & Halten (alle gleich)": benchmark}
+        )
+    )
+
+    with st.container(border=True):
+        st.subheader("📅 Diesen Monat")
+        selection = result["selection"]
+        if selection:
+            st.markdown(f"Stand heute würdest du halten: **{' + '.join(selection)}**")
+        elif result["cash_filter"]:
+            st.markdown(
+                "Stand heute würdest du halten: **Bargeld** (alle Werte sind im Minus)"
+            )
+        else:
+            st.markdown("Stand heute würdest du halten: **Bargeld**")
+
+        ranking = result["ranking"]
+        table = pd.DataFrame(
+            {
+                "Ticker": ranking["Ticker"],
+                f"Rendite der letzten {result['lookback']} Monate": [
+                    "–" if pd.isna(value) else fmt_pct(value)
+                    for value in ranking["Rendite"]
+                ],
+            }
+        )
+        st.dataframe(table, hide_index=True)
+        st.caption(
+            "Prüfe das am ersten Handelstag jedes Monats. Ändert sich die Auswahl, verkaufst du "
+            "den alten Wert und kaufst den neuen – sonst musst du nichts tun."
+        )
+
+    with st.expander("Was hätte ich wann gehalten?"):
+        rebalances = result["rebalances"]
+        if rebalances.empty:
+            st.write("In diesem Zeitraum gab es noch keine Entscheidung.")
+        else:
+            table = pd.DataFrame(
+                {
+                    "Datum": pd.to_datetime(rebalances["date"]).dt.strftime("%d.%m.%Y"),
+                    "Gehalten": rebalances["holdings"],
+                    "Gewechselt": rebalances["changed"].map({True: "Ja", False: "Nein"}),
+                }
+            )
+            st.dataframe(table, hide_index=True)
+
+    if "Aktien" in result["universe"]:
+        st.caption(MOMENTUM_STOCK_CAPTION)
+
+
 def render_help() -> None:
     st.header("❓ Hilfe")
     st.subheader("Wichtige Begriffe")
@@ -500,6 +726,10 @@ def render_help() -> None:
         "vorher nicht gesehen hat. Nur dort zeigt sich, ob eine Einstellung auch taugt.\n\n"
         "**Überanpassung (Overfitting):** Eine Strategie passt sich so gut an die alten Kurse an, "
         "dass sie nur dort funktioniert. Bei neuen Kursen klappt sie dann oft nicht mehr.\n\n"
+        "**Momentum:** Die Idee, dass Werte, die in den letzten Monaten gestiegen sind, "
+        "auch in den nächsten Monaten eher steigen. Man kauft dann die zuletzt stärksten Werte.\n\n"
+        "**Umschichten (Rebalancing):** Man verkauft Werte und kauft andere dafür. Das passiert "
+        "bei der Momentum-Strategie einmal im Monat, wenn sich die Rangliste geändert hat.\n\n"
         "**Gebühr:** Kosten, die beim Kaufen und Verkaufen anfallen. Hier sind es 0.1 % pro Handel."
     )
     st.subheader("Was tun bei Problemen?")
@@ -528,11 +758,12 @@ def main() -> None:
         "Keine Anlageberatung."
     )
 
-    start_tab, backtest_tab, finder_tab, account_tab, help_tab = st.tabs(
+    start_tab, backtest_tab, finder_tab, momentum_tab, account_tab, help_tab = st.tabs(
         [
             "🏠 Start",
             "📊 Strategie testen",
             "🔍 Strategie-Finder",
+            "🚀 Momentum",
             "💼 Mein Spielgeld-Konto",
             "❓ Hilfe",
         ]
@@ -543,6 +774,8 @@ def main() -> None:
         render_backtest()
     with finder_tab:
         render_finder()
+    with momentum_tab:
+        render_momentum()
     with account_tab:
         render_account()
     with help_tab:
