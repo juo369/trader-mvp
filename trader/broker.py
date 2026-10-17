@@ -3,8 +3,20 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from datetime import datetime, timezone
+
+
+SHARE_DECIMALS = 6  # Bruchteile erlaubt, z. B. 0.123456 Bitcoin
+
+
+def affordable_shares(cash: float, price: float, fee_rate: float) -> float:
+    """Wie viele Anteile man mit cash inkl. Gebühr kaufen kann (abgerundet auf 6 Stellen)."""
+    if price <= 0 or cash <= 0:
+        return 0.0
+    factor = 10**SHARE_DECIMALS
+    return math.floor(cash / (price * (1 + fee_rate)) * factor) / factor
 
 
 class PaperBroker:
@@ -17,7 +29,7 @@ class PaperBroker:
         self.state_file = state_file
         self.fee_rate = fee_rate
         self.cash = float(initial_cash)
-        self.positions: dict[str, int] = {}
+        self.positions: dict[str, float] = {}
         self.order_log: list[dict] = []
 
         if os.path.exists(state_file):
@@ -27,7 +39,7 @@ class PaperBroker:
         with open(self.state_file, encoding="utf-8") as f:
             data = json.load(f)
         self.cash = float(data["cash"])
-        self.positions = {k: int(v) for k, v in data.get("positions", {}).items()}
+        self.positions = {k: float(v) for k, v in data.get("positions", {}).items()}
         self.order_log = list(data.get("order_log", []))
 
     def save(self) -> None:
@@ -42,7 +54,7 @@ class PaperBroker:
         with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-    def buy(self, ticker: str, shares: int, price: float) -> None:
+    def buy(self, ticker: str, shares: float, price: float) -> None:
         if shares <= 0:
             raise ValueError(f"Stückzahl muss positiv sein, war {shares}.")
         volume = shares * price
@@ -56,7 +68,7 @@ class PaperBroker:
         self.positions[ticker] = self.positions.get(ticker, 0) + shares
         self._log("BUY", ticker, shares, price, fee)
 
-    def sell(self, ticker: str, shares: int, price: float) -> None:
+    def sell(self, ticker: str, shares: float, price: float) -> None:
         if shares <= 0:
             raise ValueError(f"Stückzahl muss positiv sein, war {shares}.")
         held = self.positions.get(ticker, 0)
@@ -66,7 +78,7 @@ class PaperBroker:
         fee = self.fee_rate * volume
         self.cash += volume - fee
         remaining = held - shares
-        if remaining == 0:
+        if remaining <= 10**-SHARE_DECIMALS:
             del self.positions[ticker]
         else:
             self.positions[ticker] = remaining
@@ -78,7 +90,7 @@ class PaperBroker:
             value += shares * prices[ticker]
         return float(value)
 
-    def _log(self, side: str, ticker: str, shares: int, price: float, fee: float) -> None:
+    def _log(self, side: str, ticker: str, shares: float, price: float, fee: float) -> None:
         self.order_log.append(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),

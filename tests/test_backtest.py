@@ -55,3 +55,14 @@ def test_max_drawdown_not_positive():
     signals = pd.Series(1, index=prices.index)
     result = run_backtest(prices, signals)
     assert result.metrics["max_drawdown"] <= 0
+
+
+def test_buys_fractions_when_price_exceeds_cash():
+    """Ein Bitcoin kostet mehr als das Startkapital – trotzdem muss gekauft werden."""
+    index = pd.date_range("2023-01-02", periods=5, freq="B")
+    prices = pd.DataFrame({"Close": [30_000.0, 31_000.0, 32_000.0, 33_000.0, 34_000.0]}, index=index)
+    signals = pd.Series(1, index=index)
+    result = run_backtest(prices, signals, initial_cash=10_000.0, fee_rate=0.01)
+    assert len(result.trades) == 1
+    assert 0 < result.trades.iloc[0]["shares"] < 1
+    assert result.metrics["total_return"] > 0

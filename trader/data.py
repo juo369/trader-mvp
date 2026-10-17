@@ -39,7 +39,12 @@ def load_prices(
             f"Keine Kursdaten für '{ticker}' im Zeitraum {start} bis {end or 'heute'} gefunden."
         )
 
-    df = _normalize(raw)
+    # Tage ohne Schlusskurs (z. B. vor dem ersten Handelstag) würden Kennzahlen zu NaN machen.
+    df = _normalize(raw).dropna(subset=["Close"])
+    if df.empty:
+        raise ValueError(
+            f"Keine Kursdaten für '{ticker}' im Zeitraum {start} bis {end or 'heute'} gefunden."
+        )
     df.index.name = "Date"
     if cache_path:
         os.makedirs(cache_dir, exist_ok=True)

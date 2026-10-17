@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
+from trader.broker import affordable_shares
 
 TRADING_DAYS = 252
 
@@ -41,7 +42,7 @@ def run_backtest(
         want_long = target.loc[date] == 1
 
         if want_long and shares == 0:
-            shares = math.floor(cash / (price * (1 + fee_rate)))
+            shares = affordable_shares(cash, price, fee_rate)
             if shares > 0:
                 volume = shares * price
                 fee = fee_rate * volume

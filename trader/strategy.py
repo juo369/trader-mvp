@@ -31,3 +31,19 @@ class SmaCrossover(Strategy):
         # NaN-Vergleiche ergeben False, damit ist die Anlaufphase automatisch 0.
         signal = (fast_ma > slow_ma).astype(int)
         return pd.Series(signal.values, index=prices.index, name="signal")
+
+
+class PriceAboveSma(Strategy):
+    """Long, solange der Schlusskurs über dem einfachen Durchschnitt der letzten window Tage liegt."""
+
+    def __init__(self, window: int = 200):
+        if window < 2:
+            raise ValueError(f"window ({window}) muss mindestens 2 sein.")
+        self.window = window
+
+    def generate_signals(self, prices: pd.DataFrame) -> pd.Series:
+        close = prices["Close"]
+        ma = sma(close, self.window)
+        # NaN-Vergleiche ergeben False, damit ist die Anlaufphase automatisch 0.
+        signal = (close > ma).astype(int)
+        return pd.Series(signal.values, index=prices.index, name="signal")

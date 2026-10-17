@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import math
 
 import pandas as pd
 
-from trader.broker import PaperBroker
+from trader.broker import PaperBroker, affordable_shares
 from trader.strategy import Strategy
 
 
@@ -26,16 +25,13 @@ def run_paper_step(
 
     action = "HOLD"
     if signal == 1 and held == 0:
-        shares = math.floor(broker.cash / (price * (1 + broker.fee_rate)))
-        # Sicherheitsschleife gegen Rundungsfehler bei der Gebühr.
-        while shares > 0 and shares * price * (1 + broker.fee_rate) > broker.cash:
-            shares -= 1
+        shares = affordable_shares(broker.cash, price, broker.fee_rate)
         if shares > 0:
             broker.buy(ticker, shares, price)
-            action = f"BUY {shares} {ticker} @ {price:.2f}"
+            action = f"BUY {shares:g} {ticker} @ {price:.2f}"
     elif signal == 0 and held > 0:
         broker.sell(ticker, held, price)
-        action = f"SELL {held} {ticker} @ {price:.2f}"
+        action = f"SELL {held:g} {ticker} @ {price:.2f}"
 
     broker.save()
     return action
