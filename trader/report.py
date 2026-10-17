@@ -23,7 +23,17 @@ POPULAR_TICKERS: dict[str, str] = {
     "Novartis": "NOVN.SW",
     "UBS": "UBSG.SW",
     "SMI-Index ETF (CSSMI.SW)": "CSSMI.SW",
+    "Bitcoin (BTC-USD)": "BTC-USD",
+    "Ethereum (ETH-USD)": "ETH-USD",
 }
+
+
+def clean_ticker(text: str) -> str:
+    """Ticker vereinheitlichen: Grossbuchstaben, Leerzeichen werden zu Bindestrichen.
+
+    "btc usd" -> "BTC-USD". Ohne das würde Yahoo zwei verschiedene Ticker laden.
+    """
+    return "-".join(text.upper().split())
 
 
 def fmt_number(value: float, decimals: int = 0, signed: bool = False) -> str:

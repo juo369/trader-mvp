@@ -84,3 +84,10 @@ def test_fmt_number_uses_apostrophe():
 def test_presets_fast_is_smaller_than_slow():
     for name, (fast, slow) in PRESETS.items():
         assert fast < slow, name
+
+
+def test_clean_ticker_turns_spaces_into_dashes():
+    from trader.report import clean_ticker
+
+    assert clean_ticker(" btc usd ") == "BTC-USD"
+    assert clean_ticker("nesn.sw") == "NESN.SW"

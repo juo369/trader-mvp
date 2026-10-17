@@ -14,6 +14,7 @@ from trader.broker import PaperBroker
 from trader.data import latest_price, load_prices
 from trader.paper import run_paper_step
 from trader.report import (
+    clean_ticker,
     POPULAR_TICKERS,
     PRESETS,
     buy_and_hold_equity,
@@ -50,7 +51,7 @@ def choose_ticker(key: str) -> str:
             "Den Ticker findest du auf finance.yahoo.com: Suche nach dem Namen, "
             "das Kürzel steht dort oben bei „Symbol“."
         )
-        return ticker.strip().upper()
+        return clean_ticker(ticker)
     return POPULAR_TICKERS[choice]
 
 
