@@ -22,10 +22,18 @@ Starten:
 .venv/bin/python -m streamlit run app.py                         # Mac/Linux
 ```
 
-Unter Windows geht auch ein Doppelklick auf `windows/5-app-starten.bat`.
+### Windows: Desktop-Verknüpfung (ohne offenes Fenster)
+
+Einmalig im Projektordner ausführen:
+
+```powershell
+.venv\Scripts\python.exe -m trader.shortcut
+```
+
+Danach liegt auf dem Desktop **„Trader MVP“**. Doppelklick startet die App im Hintergrund und öffnet den Browser; läuft sie schon, öffnet sich nur der Browser. Beenden über den Knopf **„⏻ App beenden“** links in der App.
 
 - Der Browser öffnet sich automatisch unter http://localhost:8501.
-- Beenden: Im Terminal-Fenster **Strg+C** drücken.
+- Beenden: Knopf **„⏻ App beenden“** in der App, oder im Terminal-Fenster **Strg+C**.
 - Beim ersten Start fragt Streamlit vielleicht nach einer E-Mail-Adresse. Dann einfach **Enter** drücken, du musst nichts eingeben.
 
 ## Funktionen

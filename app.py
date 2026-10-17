@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -388,6 +389,16 @@ def render_help() -> None:
     )
 
 
+def render_quit_button() -> None:
+    """Beendet den App-Server. Nötig, weil die App über die Verknüpfung ohne Fenster läuft."""
+    with st.sidebar:
+        st.markdown("### App beenden")
+        st.caption("Wenn du fertig bist, hier klicken. Danach kannst du den Browser-Tab schliessen.")
+        if st.button("⏻ App beenden", width="stretch"):
+            st.success("Die App wird beendet. Du kannst diesen Tab jetzt schliessen.")
+            threading.Timer(1.0, lambda: os._exit(0)).start()
+
+
 def main() -> None:
     st.set_page_config(page_title="Trader MVP", page_icon="📈", layout="wide")
     st.title("📈 Mein Trading-Spielplatz")
@@ -407,6 +418,7 @@ def main() -> None:
         render_account()
     with help_tab:
         render_help()
+    render_quit_button()
 
 
 main()
