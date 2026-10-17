@@ -12,6 +12,7 @@ import streamlit as st
 from trader.backtest import run_backtest
 from trader.broker import PaperBroker
 from trader.data import latest_price, load_prices
+from trader.optimize import default_candidates, walk_forward
 from trader.paper import run_paper_step
 from trader.report import (
     clean_ticker,
@@ -108,6 +109,8 @@ def render_start() -> None:
     st.markdown(
         "- **📊 Strategie testen:** Du siehst, was diese Strategie in der Vergangenheit "
         "gebracht hätte.\n"
+        "- **🔍 Strategie-Finder:** Er probiert viele Einstellungen aus und prüft den Sieger "
+        "an einer Zeit, die er nicht kannte.\n"
         "- **💼 Mein Spielgeld-Konto:** Du lässt die Strategie mit einem Konto aus Spielgeld "
         "handeln, Schritt für Schritt mit aktuellen Kursen."
     )
@@ -230,6 +233,118 @@ def show_backtest_result(result: dict) -> None:
                 }
             )
             st.dataframe(table, hide_index=True)
+
+
+def run_finder(ticker: str, start_year: int, fee_rate: float) -> dict:
+    """Lädt Kurse und sucht den Sieger in der Lernzeit. Wirft ValueError oder andere Fehler."""
+    prices = load_prices(ticker, f"{start_year}-01-01")
+    result = walk_forward(prices, fee_rate=fee_rate, initial_cash=float(START_CASH))
+    result["ticker"] = ticker
+    result["start_year"] = start_year
+    return result
+
+
+def render_finder() -> None:
+    st.header("🔍 Strategie-Finder")
+    n_settings = len(default_candidates())
+    st.markdown(
+        f"Der Finder probiert {n_settings} Einstellungen durch. Er sucht den Sieger nur in den "
+        "ersten 70 % der Zeit („Lernzeit“) und prüft ihn dann an den letzten 30 % („Prüfzeit“), "
+        "die er nicht kannte. Nur das Ergebnis der Prüfzeit zeigt, ob die Strategie wirklich "
+        "etwas taugt – in der Vergangenheit sieht im Nachhinein immer irgendetwas gut aus."
+    )
+
+    ticker = choose_ticker("finder_ticker")
+    start_year = st.slider(
+        "Ab welchem Jahr soll getestet werden?",
+        min_value=2000,
+        max_value=date.today().year - 1,
+        value=2015,
+        key="finder_year",
+    )
+    fee_rate = fee_input("finder_fee")
+
+    if st.button("🔍 Beste Einstellung suchen", type="primary", width="stretch"):
+        if not ticker:
+            st.warning("Bitte gib zuerst einen Ticker ein.")
+        else:
+            with st.spinner("Lade Kursdaten von Yahoo Finance und probiere Einstellungen aus…"):
+                try:
+                    st.session_state["finder"] = run_finder(ticker, start_year, fee_rate)
+                except ValueError as err:
+                    st.session_state.pop("finder", None)
+                    st.error(f"{err} {NETWORK_HINT}")
+                except Exception:
+                    st.session_state.pop("finder", None)
+                    st.error(
+                        "Die Kursdaten konnten nicht geladen werden. " + NETWORK_HINT
+                    )
+
+    result = st.session_state.get("finder")
+    if result:
+        show_finder_result(result, n_settings)
+
+
+def show_finder_result(result: dict, n_settings: int) -> None:
+    train_start, train_end = result["train_period"]
+    test_start, test_end = result["test_period"]
+    train_metrics = result["train_result"].metrics
+    test_metrics = result["test_result"].metrics
+
+    st.caption(f"Ergebnis für {result['ticker']} ab {result['start_year']}.")
+
+    st.subheader(
+        f"1. Bester Treffer in der Lernzeit ({train_start.year}–{train_end.year})"
+    )
+    st.markdown(f"**{result['best_label']}**")
+    col1, col2 = st.columns(2)
+    col1.metric("Rendite Strategie", fmt_pct(train_metrics["total_return"]))
+    col2.metric("Kaufen & Halten", fmt_pct(train_metrics["buy_and_hold_return"]))
+
+    st.subheader(f"2. Ehrlicher Test in der Prüfzeit ({test_start.year}–{test_end.year})")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Rendite Strategie", fmt_pct(test_metrics["total_return"]))
+    col2.metric("Kaufen & Halten", fmt_pct(test_metrics["buy_and_hold_return"]))
+    col3.metric("Grösster Einbruch", fmt_pct(test_metrics["max_drawdown"]))
+
+    test_return = test_metrics["total_return"]
+    buy_and_hold_return = test_metrics["buy_and_hold_return"]
+    if test_return < 0:
+        st.warning(
+            "Der Sieger hat in der Prüfzeit Geld verloren. Was in der Vergangenheit am besten "
+            "war, hat danach nicht mehr funktioniert."
+        )
+    elif test_return >= buy_and_hold_return:
+        st.success(
+            "Der Sieger war auch in der Prüfzeit besser als Kaufen & Halten. Das ist ein gutes "
+            "Zeichen – aber keine Garantie für die Zukunft."
+        )
+    else:
+        st.info(
+            "Der Sieger hat in der Prüfzeit Gewinn gemacht, aber einfach Kaufen & Halten wäre "
+            "besser gewesen. Typisch: Der beste Treffer von gestern ist selten der beste von morgen."
+        )
+
+    st.subheader("Prüfzeit: Wie hätte sich dein Geld entwickelt?")
+    chart = pd.DataFrame(
+        {
+            "Strategie": result["test_result"].equity,
+            "Kaufen & Halten": result["test_buy_and_hold_equity"],
+        }
+    )
+    st.line_chart(chart)
+
+    with st.expander(f"Alle {n_settings} Einstellungen in der Lernzeit"):
+        ranking = result["ranking"]
+        table = pd.DataFrame(
+            {
+                "Einstellung": ranking["label"],
+                "Rendite": ranking["total_return"].map(fmt_pct),
+                "Grösster Einbruch": ranking["max_drawdown"].map(fmt_pct),
+                "Trades": ranking["num_trades"],
+            }
+        )
+        st.dataframe(table, hide_index=True)
 
 
 def render_account() -> None:
@@ -380,6 +495,11 @@ def render_help() -> None:
         "tiefsten Punkt danach. Je kleiner, desto ruhiger war die Fahrt.\n\n"
         "**Kaufen & Halten:** Man kauft am Anfang und verkauft nie. Das ist der einfachste "
         "Vergleich für jede Strategie.\n\n"
+        "**Lernzeit / Prüfzeit:** Die Lernzeit sind die ersten 70 % des Zeitraums, in der die "
+        "beste Einstellung gesucht wird. Die Prüfzeit sind die letzten 30 %, die der Finder "
+        "vorher nicht gesehen hat. Nur dort zeigt sich, ob eine Einstellung auch taugt.\n\n"
+        "**Überanpassung (Overfitting):** Eine Strategie passt sich so gut an die alten Kurse an, "
+        "dass sie nur dort funktioniert. Bei neuen Kursen klappt sie dann oft nicht mehr.\n\n"
         "**Gebühr:** Kosten, die beim Kaufen und Verkaufen anfallen. Hier sind es 0.1 % pro Handel."
     )
     st.subheader("Was tun bei Problemen?")
@@ -408,13 +528,21 @@ def main() -> None:
         "Keine Anlageberatung."
     )
 
-    start_tab, backtest_tab, account_tab, help_tab = st.tabs(
-        ["🏠 Start", "📊 Strategie testen", "💼 Mein Spielgeld-Konto", "❓ Hilfe"]
+    start_tab, backtest_tab, finder_tab, account_tab, help_tab = st.tabs(
+        [
+            "🏠 Start",
+            "📊 Strategie testen",
+            "🔍 Strategie-Finder",
+            "💼 Mein Spielgeld-Konto",
+            "❓ Hilfe",
+        ]
     )
     with start_tab:
         render_start()
     with backtest_tab:
         render_backtest()
+    with finder_tab:
+        render_finder()
     with account_tab:
         render_account()
     with help_tab:

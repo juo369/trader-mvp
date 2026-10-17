@@ -19,7 +19,15 @@ def test_app_starts_without_exception(app_in_tmp_dir):
 
     assert not at.exception
     assert at.title[0].value == "📈 Mein Trading-Spielplatz"
-    assert len(at.tabs) == 4
+    assert len(at.tabs) == 5
+
+
+def test_finder_tab_exists_and_app_runs(app_in_tmp_dir):
+    at = AppTest.from_file(str(APP_PATH))
+    at.run(timeout=30)
+
+    assert not at.exception
+    assert "🔍 Strategie-Finder" in [tab.label for tab in at.tabs]
 
 
 def test_app_does_not_write_files_on_start(app_in_tmp_dir):
