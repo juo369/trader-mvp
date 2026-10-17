@@ -26,10 +26,10 @@ def test_signal_one_buys_with_all_cash(tmp_path):
     broker = PaperBroker(state_file=str(tmp_path / "acc.json"), initial_cash=1_000.0, fee_rate=0.001)
     action = run_paper_step(DummyStrategy(1), "SPY", broker, make_prices(), 100.0)
 
-    # floor(1000 / (100 * 1.001)) = 9 Stück
-    assert action == "BUY 9 SPY @ 100.00"
-    assert broker.positions == {"SPY": 9}
-    assert broker.cash == pytest.approx(1_000.0 - 900.0 - 0.9)
+    # Bruchteile erlaubt: 1000 / (100 * 1.001) = 9.99001 Anteile (auf 6 Stellen abgerundet)
+    assert action == "BUY 9.99001 SPY @ 100.00"
+    assert broker.positions == {"SPY": pytest.approx(9.99001)}
+    assert broker.cash == pytest.approx(0.0, abs=0.01)
     assert (tmp_path / "acc.json").exists()
 
 
@@ -45,7 +45,7 @@ def test_signal_zero_sells_position(tmp_path):
     run_paper_step(DummyStrategy(1), "SPY", broker, make_prices(), 100.0)
 
     action = run_paper_step(DummyStrategy(0), "SPY", broker, make_prices(), 110.0)
-    assert action == "SELL 9 SPY @ 110.00"
+    assert action == "SELL 9.99001 SPY @ 110.00"
     assert "SPY" not in broker.positions
     assert broker.cash > 1_000.0 - 10.0  # Gewinn abzüglich Gebühr
 

@@ -374,7 +374,7 @@ def render_account() -> None:
 
     if broker is not None:
         held_text = (
-            " + ".join(f"{shares} × {ticker}" for ticker, shares in broker.positions.items())
+            " + ".join(f"{shares:g} × {ticker}" for ticker, shares in broker.positions.items())
             or "keine"
         )
         col1, col2, col3 = st.columns(3)
@@ -439,11 +439,11 @@ def trade_with_account(broker: PaperBroker, ticker: str, preset: str) -> None:
         order = broker.order_log[-1]
         if order["side"] == "BUY":
             st.success(
-                f"Gekauft: {order['shares']} Stück {order['ticker']} zu {order['price']:.2f}"
+                f"Gekauft: {order['shares']:g} Stück {order['ticker']} zu {order['price']:.2f}"
             )
         else:
             st.success(
-                f"Verkauft: {order['shares']} Stück {order['ticker']} zu {order['price']:.2f}"
+                f"Verkauft: {order['shares']:g} Stück {order['ticker']} zu {order['price']:.2f}"
             )
     else:
         st.info("Heute nichts zu tun – die Strategie wartet ab.")

@@ -15,7 +15,7 @@ from trader.data import load_prices
 UNIVERSES: dict[str, list[str]] = {
     "Weltweite ETFs (Aktien, Anleihen, Gold)": ["SPY", "QQQ", "EFA", "EEM", "TLT", "GLD"],
     "US-Tech-Aktien": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META"],
-    "Schweizer Aktien": ["NESN.SW", "NOVN.SW", "ROG.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW"],
+    "Schweizer Aktien": ["NESN.SW", "NOVN.SW", "RO.SW", "UBSG.SW", "ZURN.SW", "ABBN.SW"],
     "Krypto": ["BTC-USD", "ETH-USD"],
 }
 
