@@ -10,6 +10,19 @@ Python-Grundgerüst für einen einfachen Trader: Aktien und ETFs, Kursdaten von 
 - **Paper-Trading** mit einem lokalen, simulierten Konto (Zustand als JSON gespeichert)
 - Daten aus Yahoo Finance mit lokalem CSV-Cache
 
+## Windows: ganz einfach per Doppelklick
+
+Voraussetzung: Python von https://www.python.org/downloads/ (beim Installieren **„Add Python to PATH“** anhaken).
+
+Im Ordner `windows/` nacheinander doppelklicken:
+
+1. `1-installieren.bat` – richtet alles ein (nur einmal nötig)
+2. `2-backtest.bat` – testet die Strategie mit historischen Daten
+3. `3-paper-trading.bat` – ein Handelsschritt mit aktuellen Kursen, zeigt danach das Konto
+4. `4-taeglich-automatisch.bat` – optional: führt Schritt 3 jeden Werktag um 22:15 Uhr automatisch aus (Ergebnisse in `paper.log`)
+
+Den Ticker (Standard `SPY`) kannst du oben in den `.bat`-Dateien ändern (Rechtsklick → Bearbeiten).
+
 ## Setup
 
 ```bash
